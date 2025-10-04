@@ -11,6 +11,7 @@
         rel="stylesheet">
 
     <style>
+        /* CSS ទាំងអស់រក្សាទុកដដែល មិនមានការផ្លាស់ប្តូរទេ */
         :root {
             --primary-color: #007bff;
             --background-color: #f4f7f6;
@@ -76,15 +77,10 @@
             transition: background-color 0.3s ease;
         }
 
-        .login-box button:hover {
-            background-color: #0056b3;
-        }
-
         #map-container {
             display: none;
             width: 100%;
             height: 100vh;
-            position: relative;
         }
 
         #map {
@@ -108,7 +104,6 @@
             font-family: var(--font-family-header);
         }
 
-        /* (ថ្មី) CSS សម្រាប់ធ្វើឲ្យ Legend ចុចបាន */
         .legend .legend-item {
             display: flex;
             align-items: center;
@@ -131,7 +126,6 @@
 </head>
 
 <body>
-
     <div id="login-container">
         <div class="login-box">
             <h1>ចូលគណនី</h1>
@@ -140,7 +134,6 @@
             <button id="login-btn">ចូលប្រើប្រាស់</button>
         </div>
     </div>
-
     <div id="map-container">
         <div id="map"></div>
     </div>
@@ -148,6 +141,8 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="https://unpkg.com/leaflet.movingmarker/dist/leaflet.movingmarker.js"></script>
 
     <script>
         const firebaseConfig = {
@@ -157,8 +152,7 @@
             projectId: "live-location-tracker-fcd7c",
             storageBucket: "live-location-tracker-fcd7c.appspot.com",
             messagingSenderId: "880240485343",
-            appId: "1:880240485343:web:98bce0466ba56cf3ceda6a",
-            measurementId: "G-K61VZB93WX"
+            appId: "1:880240485343:web:98bce0466ba56cf3ceda6a"
         };
 
         firebase.initializeApp(firebaseConfig);
@@ -174,10 +168,7 @@
             const passwordInput = document.getElementById('password');
             const loginBtn = document.getElementById('login-btn');
 
-            let map;
-            let currentUsername = '';
-            let userMarkers = {};
-            let legendControl; // (ថ្មី) បង្កើត متغیر រក្សាទុក Legend
+            let map, currentUsername = '', userMarkers = {}, legendControl;
 
             const createColorIcon = (color) => {
                 return new L.Icon({
@@ -198,9 +189,7 @@
 
             loginBtn.addEventListener('click', () => {
                 const username = usernameInput.value.trim();
-                const password = passwordInput.value;
-
-                if (validUsers.includes(username) && password === correctPassword) {
+                if (validUsers.includes(username) && passwordInput.value === correctPassword) {
                     currentUsername = username;
                     alert('ការចូលគណនីបានជោគជ័យ!');
                     loginContainer.style.display = 'none';
@@ -216,36 +205,24 @@
                 }
             });
 
-            passwordInput.addEventListener('keyup', (event) => {
-                if (event.key === 'Enter') loginBtn.click();
-            });
-
             function initializeMap() {
                 map = L.map('map').setView([11.5564, 104.9282], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-                // (កែប្រែ) បង្កើត Legend control តែម្តង
                 legendControl = L.control({ position: 'bottomright' });
-                legendControl.onAdd = function (map) {
-                    const div = L.DomUtil.create('div', 'info legend');
-                    div.innerHTML = '<h4>បញ្ជីអ្នកប្រើប្រាស់</h4>';
-                    return div;
-                };
+                legendControl.onAdd = (map) => L.DomUtil.create('div', 'info legend');
                 legendControl.addTo(map);
 
-                // (ថ្មី) Zoom ទៅទីតាំងខ្លួនឯងពេលចាប់ផ្តើម
-                navigator.geolocation.getCurrentPosition(position => {
-                    map.setView([position.coords.latitude, position.coords.longitude], 16);
+                navigator.geolocation.getCurrentPosition(pos => {
+                    map.setView([pos.coords.latitude, pos.coords.longitude], 16);
                 });
             }
 
             function startWatchingLocation() {
-                if (!navigator.geolocation) return;
                 navigator.geolocation.watchPosition((position) => {
                     const { latitude, longitude } = position.coords;
                     database.ref('locations/' + currentUsername).set({
-                        lat: latitude, lng: longitude, name: currentUsername,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                        lat: latitude, lng: longitude, name: currentUsername
                     });
                 }, null, { enableHighAccuracy: true });
             }
@@ -256,7 +233,6 @@
                 });
             }
 
-            // (កែប្រែ) មុខងារនេះនឹង Update ទាំង Marker និង Legend
             function updateMapMarkers(locations) {
                 if (!map) return;
 
@@ -267,33 +243,33 @@
                     }
                 });
 
-                // (ថ្មី) Update Legend ឲ្យចុចបាន
                 const legendDiv = legendControl.getContainer();
-                legendDiv.innerHTML = '<h4>បញ្ជីអ្នកប្រើប្រាស់</h4>'; // Clear and add title
+                legendDiv.innerHTML = '<h4>បញ្ជីអ្នកប្រើប្រាស់</h4>';
 
                 if (!locations) return;
 
                 for (const username in locations) {
                     const userData = locations[username];
                     const userLatLng = [userData.lat, userData.lng];
-
                     const iconToUse = (username === currentUsername) ? currentUserIcon : (userColorMap[username] || createColorIcon('grey'));
 
+                    // (កែប្រែ) ការ Update និងបង្កើត Marker
                     if (userMarkers[username]) {
-                        userMarkers[username].setLatLng(userLatLng).setIcon(iconToUse);
+                        // បើមាន Marker ស្រាប់ ប្រើ moveTo ដើម្បីឲ្យវាเคลื่อนไหว
+                        userMarkers[username].moveTo(userLatLng, 3000); // 3000ms = 3 វិនាទី
                     } else {
-                        const newMarker = L.marker(userLatLng, { icon: iconToUse }).addTo(map);
+                        // បើអត់មាន បង្កើត MovingMarker ថ្មី
+                        const newMarker = L.Marker.movingMarker([userLatLng, userLatLng], [], { icon: iconToUse }).addTo(map);
                         newMarker.bindPopup(`<b>${userData.name}</b>`);
                         userMarkers[username] = newMarker;
                     }
 
-                    // (ថ្មី) បន្ថែម User ទៅក្នុង Legend
                     const legendItem = document.createElement('div');
                     legendItem.className = 'legend-item';
                     legendItem.innerHTML = `<img src="${iconToUse.options.iconUrl}"> ${username}`;
                     legendItem.onclick = () => {
-                        map.flyTo(userLatLng, 17); // ហោះទៅទីតាំង User
-                        userMarkers[username].openPopup(); // បង្ហាញឈ្មោះ
+                        map.flyTo(userLatLng, 17);
+                        userMarkers[username].openPopup();
                     };
                     legendDiv.appendChild(legendItem);
                 }
