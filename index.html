@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ប្រព័ន្ធតាមដានទីតាំងបុគ្គលិក</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+    <link href="https://fonts.googleapis.com/css2?family=Koulen&family=Nokora:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --background-color: #f4f7f6;
+            --font-family-header: 'Koulen', cursive;
+            --font-family-body: 'Nokora', serif;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: var(--font-family-body);
+            background-color: var(--background-color);
+        }
+
+        /* ទម្រង់ Login */
+        #login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(135deg, #6e45e2, #88d3ce);
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .login-box h1 {
+            font-family: var(--font-family-header);
+            color: #333;
+            margin-bottom: 25px;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        .login-box button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 18px;
+            font-family: var(--font-family-header);
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .login-box button:hover {
+            background-color: #0056b3;
+        }
+
+        /* ទំព័រផែនទី */
+        #map-container {
+            display: none;
+            /* លាក់ទុកសិន */
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        #header-info {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 20px;
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            font-family: var(--font-family-header);
+            font-size: 1.2em;
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="login-container">
+        <div class="login-box">
+            <h1>ចូលគណនី</h1>
+            <input type="text" id="username" placeholder="សូមបញ្ចូលឈ្មោះ" required>
+            <input type="password" id="password" placeholder="សូមបញ្ចូលពាក្យសម្ងាត់" required>
+            <button id="login-btn">ចូលប្រើប្រាស់</button>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="header-info"></div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- កំណត់ค่าเริ่มต้น ---
+            const validUsers = [
+                "ប៊ន ចន្ថា",
+                "សយ គឹមសុខដានី",
+                "បុី ថាវរី",
+                "ហឹន ចាន់ថៃ"
+            ];
+            const correctPassword = "DI123";
+
+            // --- យក DOM Elements ---
+            const loginContainer = document.getElementById('login-container');
+            const mapContainer = document.getElementById('map-container');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const loginBtn = document.getElementById('login-btn');
+            const headerInfo = document.getElementById('header-info');
+
+            let map;
+            let userMarker;
+            let currentUsername = '';
+
+            // --- មុខងារសម្រាប់ Login ---
+            loginBtn.addEventListener('click', () => {
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value;
+
+                if (validUsers.includes(username) && password === correctPassword) {
+                    // បើការ Login ត្រឹមត្រូវ
+                    currentUsername = username;
+                    alert('ការចូលគណនីបានជោគជ័យ!');
+                    loginContainer.style.display = 'none';
+                    mapContainer.style.display = 'block';
+                    headerInfo.textContent = `អ្នកប្រើប្រាស់៖ ${currentUsername}`;
+                    initializeMapAndLocation();
+                } else {
+                    // បើការ Login ខុស
+                    alert('ឈ្មោះ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ!');
+                }
+            });
+
+            // --- មុខងារសម្រាប់ Password Input (ចុច Enter ដើម្បី Login) ---
+            passwordInput.addEventListener('keyup', function (event) {
+                if (event.key === 'Enter') {
+                    loginBtn.click();
+                }
+            });
+
+
+            // --- មុខងារសម្រាប់បង្កើតផែនទី និងចាប់ផ្តើមតាមដានទីតាំង ---
+            function initializeMapAndLocation() {
+                // បង្កើតផែនទី និងកំណត់ទីតាំងដំបូង (ឧ. ភ្នំពេញ)
+                map = L.map('map').setView([11.5564, 104.9282], 13);
+
+                // បន្ថែម Layer ទៅលើផែនទី (ប្រើ OpenStreetMap)
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(map);
+
+                // ចាប់ផ្តើមតាមដានទីតាំង
+                startWatchingLocation();
+            }
+
+            // --- មុខងារតាមដានទីតាំង Live ---
+            function startWatchingLocation() {
+                if (!navigator.geolocation) {
+                    alert("កម្មវិធីរុករករបស់អ្នកមិនគាំទ្រ Geolocation ទេ។");
+                    return;
+                }
+
+                const options = {
+                    enableHighAccuracy: true, // ប្រើ GPS បើអាច
+                    timeout: 10000,           // រយៈពេលរង់ចាំ
+                    maximumAge: 0             // មិនប្រើទីតាំងเก่า (cache)
+                };
+
+                navigator.geolocation.watchPosition(onSuccess, onError, options);
+            }
+
+            // --- មុខងារពេលទទួលបានទីតាំងជោគជ័យ ---
+            function onSuccess(position) {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                const userLatLng = [lat, lon];
+
+                if (!userMarker) {
+                    // បង្កើត Marker លើកដំបូង
+                    userMarker = L.marker(userLatLng).addTo(map);
+                    userMarker.bindPopup(`<b>${currentUsername}</b>`).openPopup();
+                } else {
+                    // Update ទីតាំង Marker ដែលមានស្រាប់
+                    userMarker.setLatLng(userLatLng);
+                }
+
+                // បង្ហាញទីតាំងថ្មីនៅចំកណ្តាលផែនទី
+                map.setView(userLatLng, 16); // Zoom ឲ្យជិតជាងមុន
+            }
+
+            // --- មុខងារពេលមានបញ្ហាក្នុងការទទួលបានទីតាំង ---
+            function onError(error) {
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        alert("អ្នកមិនបានអនុញ្ញាតឲ្យเข้าถึงទីតាំងទេ។ សូម Refresh ទំព័រហើយចុច Allow។");
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        alert("ព័ត៌មានទីតាំងមិនអាចរកឃើញទេ។");
+                        break;
+                    case error.TIMEOUT:
+                        alert("ការស្នើសុំទីតាំងអស់ពេលកំណត់។");
+                        break;
+                    default:
+                        alert("មានបញ្ហាមិនស្គាល់មូលហេតុ។");
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
