@@ -6,9 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ប្រព័ន្ធតាមដានទីតាំងបុគ្គលិក</title>
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Koulen&family=Nokora:wght@400;700&display=swap"
         rel="stylesheet">
 
@@ -30,7 +28,6 @@
             background-color: var(--background-color);
         }
 
-        /* ទម្រង់ Login */
         #login-container {
             display: flex;
             justify-content: center;
@@ -83,10 +80,8 @@
             background-color: #0056b3;
         }
 
-        /* ទំព័រផែនទី */
         #map-container {
             display: none;
-            /* លាក់ទុកសិន */
             width: 100%;
             height: 100vh;
             position: relative;
@@ -97,19 +92,28 @@
             height: 100%;
         }
 
-        #header-info {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
+        /* (ថ្មី) CSS សម្រាប់ Legend */
+        .legend {
+            padding: 10px;
+            font-size: 14px;
             background: rgba(255, 255, 255, 0.9);
-            padding: 8px 20px;
-            border-radius: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-            font-family: var(--font-family-header);
-            font-size: 1.2em;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            line-height: 24px;
             color: #333;
+        }
+
+        .legend h4 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            font-family: var(--font-family-header);
+        }
+
+        .legend img {
+            width: 16px;
+            height: 16px;
+            margin-right: 5px;
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -126,127 +130,169 @@
     </div>
 
     <div id="map-container">
-        <div id="header-info"></div>
         <div id="map"></div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBI5D_95mhVlSTM63-ZaGv_lsMsGDKD9_c",
+            authDomain: "live-location-tracker-fcd7c.firebaseapp.com",
+            databaseURL: "https://live-location-tracker-fcd7c-default-rtdb.firebaseio.com",
+            projectId: "live-location-tracker-fcd7c",
+            storageBucket: "live-location-tracker-fcd7c.appspot.com",
+            messagingSenderId: "880240485343",
+            appId: "1:880240485343:web:98bce0466ba56cf3ceda6a",
+            measurementId: "G-K61VZB93WX"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
         document.addEventListener('DOMContentLoaded', () => {
-            // --- កំណត់ค่าเริ่มต้น ---
-            const validUsers = [
-                "ប៊ន ចន្ថា",
-                "សយ គឹមសុខដានី",
-                "បុី ថាវរី",
-                "ហឹន ចាន់ថៃ"
-            ];
+            const validUsers = ["ប៊ន ចន្ថា", "សយ គឹមសុខដានី", "បុី ថាវរី", "ហឹន ចាន់ថៃ"];
             const correctPassword = "DI123";
 
-            // --- យក DOM Elements ---
             const loginContainer = document.getElementById('login-container');
             const mapContainer = document.getElementById('map-container');
             const usernameInput = document.getElementById('username');
             const passwordInput = document.getElementById('password');
             const loginBtn = document.getElementById('login-btn');
-            const headerInfo = document.getElementById('header-info');
 
             let map;
-            let userMarker;
             let currentUsername = '';
+            let userMarkers = {};
 
-            // --- មុខងារសម្រាប់ Login ---
+            // --- (ថ្មី) ការបង្កើត Custom Icons តាមពណ៌ ---
+            const createColorIcon = (color) => {
+                return new L.Icon({
+                    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                });
+            };
+
+            const redIcon = createColorIcon('red');
+            const greenIcon = createColorIcon('green');
+            const orangeIcon = createColorIcon('orange');
+            const violetIcon = createColorIcon('violet');
+            const blueIcon = createColorIcon('blue'); // សម្រាប់ User បច្ចុប្បន្ន
+
+            // --- (ថ្មី) ការកំណត់ពណ៌សម្រាប់ User ម្នាក់ៗ ---
+            const userColorMap = {
+                "ប៊ន ចន្ថា": redIcon,
+                "សយ គឹមសុខដានី": greenIcon,
+                "បុី ថាវរី": orangeIcon,
+                "ហឹន ចាន់ថៃ": violetIcon
+            };
+
             loginBtn.addEventListener('click', () => {
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value;
 
                 if (validUsers.includes(username) && password === correctPassword) {
-                    // បើការ Login ត្រឹមត្រូវ
                     currentUsername = username;
                     alert('ការចូលគណនីបានជោគជ័យ!');
                     loginContainer.style.display = 'none';
                     mapContainer.style.display = 'block';
-                    headerInfo.textContent = `អ្នកប្រើប្រាស់៖ ${currentUsername}`;
-                    initializeMapAndLocation();
+
+                    initializeMap();
+                    startWatchingLocation();
+                    listenForAllUserLocations();
+
+                    database.ref('locations/' + currentUsername).onDisconnect().remove();
                 } else {
-                    // បើការ Login ខុស
                     alert('ឈ្មោះ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ!');
                 }
             });
 
-            // --- មុខងារសម្រាប់ Password Input (ចុច Enter ដើម្បី Login) ---
-            passwordInput.addEventListener('keyup', function (event) {
-                if (event.key === 'Enter') {
-                    loginBtn.click();
-                }
+            passwordInput.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') loginBtn.click();
             });
 
-
-            // --- មុខងារសម្រាប់បង្កើតផែនទី និងចាប់ផ្តើមតាមដានទីតាំង ---
-            function initializeMapAndLocation() {
-                // បង្កើតផែនទី និងកំណត់ទីតាំងដំបូង (ឧ. ភ្នំពេញ)
+            function initializeMap() {
                 map = L.map('map').setView([11.5564, 104.9282], 13);
-
-                // បន្ថែម Layer ទៅលើផែនទី (ប្រើ OpenStreetMap)
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }).addTo(map);
 
-                // ចាប់ផ្តើមតាមដានទីតាំង
-                startWatchingLocation();
-            }
-
-            // --- មុខងារតាមដានទីតាំង Live ---
-            function startWatchingLocation() {
-                if (!navigator.geolocation) {
-                    alert("កម្មវិធីរុករករបស់អ្នកមិនគាំទ្រ Geolocation ទេ។");
-                    return;
-                }
-
-                const options = {
-                    enableHighAccuracy: true, // ប្រើ GPS បើអាច
-                    timeout: 10000,           // រយៈពេលរង់ចាំ
-                    maximumAge: 0             // មិនប្រើទីតាំងเก่า (cache)
+                // --- (ថ្មី) បន្ថែម Legend ទៅលើផែនទី ---
+                const legend = L.control({ position: 'bottomright' });
+                legend.onAdd = function (map) {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.innerHTML += '<h4>បញ្ជីអ្នកប្រើប្រាស់</h4>';
+                    for (const user in userColorMap) {
+                        div.innerHTML +=
+                            `<img src="${userColorMap[user].options.iconUrl}"> ${user}<br>`;
+                    }
+                    return div;
                 };
-
-                navigator.geolocation.watchPosition(onSuccess, onError, options);
+                legend.addTo(map);
             }
 
-            // --- មុខងារពេលទទួលបានទីតាំងជោគជ័យ ---
-            function onSuccess(position) {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                const userLatLng = [lat, lon];
+            function startWatchingLocation() {
+                if (!navigator.geolocation) return alert("Geolocation មិនត្រូវបានគាំទ្រទេ។");
 
-                if (!userMarker) {
-                    // បង្កើត Marker លើកដំបូង
-                    userMarker = L.marker(userLatLng).addTo(map);
-                    userMarker.bindPopup(`<b>${currentUsername}</b>`).openPopup();
-                } else {
-                    // Update ទីតាំង Marker ដែលមានស្រាប់
-                    userMarker.setLatLng(userLatLng);
-                }
-
-                // បង្ហាញទីតាំងថ្មីនៅចំកណ្តាលផែនទី
-                map.setView(userLatLng, 16); // Zoom ឲ្យជិតជាងមុន
+                navigator.geolocation.watchPosition((position) => {
+                    const { latitude, longitude } = position.coords;
+                    const userLocationRef = database.ref('locations/' + currentUsername);
+                    userLocationRef.set({
+                        lat: latitude,
+                        lng: longitude,
+                        name: currentUsername,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }, (error) => {
+                    console.error("Error getting location:", error.message);
+                }, { enableHighAccuracy: true });
             }
 
-            // --- មុខងារពេលមានបញ្ហាក្នុងការទទួលបានទីតាំង ---
-            function onError(error) {
-                switch (error.code) {
-                    case error.PERMISSION_DENIED:
-                        alert("អ្នកមិនបានអនុញ្ញាតឲ្យเข้าถึงទីតាំងទេ។ សូម Refresh ទំព័រហើយចុច Allow។");
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        alert("ព័ត៌មានទីតាំងមិនអាចរកឃើញទេ។");
-                        break;
-                    case error.TIMEOUT:
-                        alert("ការស្នើសុំទីតាំងអស់ពេលកំណត់។");
-                        break;
-                    default:
-                        alert("មានបញ្ហាមិនស្គាល់មូលហេតុ។");
-                        break;
+            function listenForAllUserLocations() {
+                const locationsRef = database.ref('locations');
+                locationsRef.on('value', (snapshot) => {
+                    const allLocations = snapshot.val();
+                    updateMapMarkers(allLocations);
+                });
+            }
+
+            function updateMapMarkers(locations) {
+                if (!map) return;
+
+                Object.keys(userMarkers).forEach(username => {
+                    if (!locations || !locations[username]) {
+                        map.removeLayer(userMarkers[username]);
+                        delete userMarkers[username];
+                    }
+                });
+
+                if (!locations) return;
+
+                for (const username in locations) {
+                    const userData = locations[username];
+                    const userLatLng = [userData.lat, userData.lng];
+
+                    // --- (កែប្រែ) កំណត់ Icon សម្រាប់ Marker ---
+                    let iconToUse;
+                    if (username === currentUsername) {
+                        iconToUse = blueIcon; // User បច្ចុប្បន្នមានពណ៌ខៀវ
+                    } else {
+                        iconToUse = userColorMap[username] || redIcon; // អ្នកផ្សេងទៀតតាមពណ៌ដែលបានកំណត់
+                    }
+
+                    if (userMarkers[username]) {
+                        userMarkers[username].setLatLng(userLatLng).setIcon(iconToUse);
+                    } else {
+                        const newMarker = L.marker(userLatLng, { icon: iconToUse }).addTo(map);
+                        newMarker.bindPopup(`<b>${userData.name}</b>`);
+                        userMarkers[username] = newMarker;
+                    }
                 }
             }
         });
